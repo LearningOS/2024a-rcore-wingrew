@@ -15,12 +15,20 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
-use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
+use core::array::from_fn;
+use core::usize;
+
+use crate::config::MAX_APP_NUM;
+use crate::loader::{get_num_app, init_app_cx};
+use crate::sync::UPSafeCell;
+use crate::timer::get_time_ms;
+use alloc::boxed::Box;
+
 use lazy_static::*;
 use switch::__switch;
-pub use task::{TaskControlBlock, TaskStatus};
+pub use task::{TaskControlBlock, TaskStatus, TaskInfo};
 
 pub use context::TaskContext;
 
@@ -53,10 +61,21 @@ lazy_static! {
     pub static ref TASK_MANAGER: TaskManager = {
         println!("init TASK_MANAGER");
         let num_app = get_num_app();
+<<<<<<< HEAD
         println!("num_app = {}", num_app);
         let mut tasks: Vec<TaskControlBlock> = Vec::new();
         for i in 0..num_app {
             tasks.push(TaskControlBlock::new(get_app_data(i), i));
+=======
+        let mut tasks: [TaskControlBlock; MAX_APP_NUM] = from_fn(|_| TaskControlBlock {
+            task_cx: TaskContext::zero_init(),
+            task_status: TaskStatus::UnInit,
+            task_info: Box::new(TaskInfo::new()),
+        });
+        for (i, task) in tasks.iter_mut().enumerate() {
+            task.task_cx = TaskContext::goto_restore(init_app_cx(i));
+            task.task_status = TaskStatus::Ready;
+>>>>>>> 8541143 (ch3)
         }
         TaskManager {
             num_app,
@@ -77,16 +96,25 @@ impl TaskManager {
     /// But in ch4, we load apps statically, so the first task is a real app.
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
+<<<<<<< HEAD
         let next_task = &mut inner.tasks[0];
         next_task.task_status = TaskStatus::Running;
         let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
+=======
+        let task0 = &mut inner.tasks[0];
+        task0.task_status = TaskStatus::Running;
+        let task_info = task0.task_info.as_mut();
+        task_info.status = TaskStatus::Running;
+        task_info.time = get_time_ms();
+        let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
+>>>>>>> 8541143 (ch3)
         drop(inner);
         let mut _unused = TaskContext::zero_init();
         // before this, we should drop local variables that must be dropped manually
         unsafe {
             __switch(&mut _unused as *mut _, next_task_cx_ptr);
         }
-        panic!("unreachable in run_first_task!");
+        panic!("unreachable in run_first_task!"); 
     }
 
     /// Change the status of current `Running` task into `Ready`.
@@ -141,6 +169,11 @@ impl TaskManager {
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
             inner.current_task = next;
+            let task_info = inner.tasks[next].task_info.as_mut();
+            if task_info.time==0 {
+                task_info.time = get_time_ms();
+            }
+            task_info.status = TaskStatus::Running;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
             drop(inner);
@@ -152,6 +185,20 @@ impl TaskManager {
         } else {
             panic!("All applications completed!");
         }
+    }
+
+    fn update_info(&self, id:usize){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let task_info = inner.tasks[current].task_info.as_mut();
+        task_info.syscall_times[id] += 1;
+    }
+
+    fn show_info(&self) -> TaskInfo{
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let task_info = inner.tasks[current].task_info.as_mut();
+        task_info.clone()
     }
 }
 
@@ -188,6 +235,7 @@ pub fn exit_current_and_run_next() {
     run_next_task();
 }
 
+<<<<<<< HEAD
 /// Get the current 'Running' task's token.
 pub fn current_user_token() -> usize {
     TASK_MANAGER.get_current_token()
@@ -202,3 +250,14 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
 }
+
+/// update info
+pub fn update_info(id:usize){
+    TASK_MANAGER.update_info(id);
+}
+
+/// show_info
+pub fn show_info()->TaskInfo{
+    TASK_MANAGER.show_info()
+}
+
