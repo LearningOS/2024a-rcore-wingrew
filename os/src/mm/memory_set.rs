@@ -262,6 +262,18 @@ impl MemorySet {
             false
         }
     }
+
+    /// map
+    pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) -> isize{
+        let _ = self.page_table.map(vpn, ppn, flags);
+        0
+    }
+
+    /// unmap
+    pub fn unmap(&mut self, vpn: VirtPageNum) -> isize{
+        let _ = self.page_table.unmap(vpn);
+        0
+    }
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {

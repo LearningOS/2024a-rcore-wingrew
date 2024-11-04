@@ -20,7 +20,8 @@ pub struct PhysPageNum(pub usize);
 /// virtual page number
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct VirtPageNum(pub usize);
-
+/// a simple range structure for virtual page number
+pub type VPNRange = SimpleRange<VirtPageNum>;
 /// Debugging
 
 impl Debug for VirtAddr {
@@ -269,5 +270,4 @@ where
         }
     }
 }
-/// a simple range structure for virtual page number
-pub type VPNRange = SimpleRange<VirtPageNum>;
+

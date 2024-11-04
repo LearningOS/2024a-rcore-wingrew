@@ -6,6 +6,7 @@ use crate::config::TRAP_CONTEXT_BASE;
 use crate::mm::{
     kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
 };
+use crate::timer::get_time_ms;
 use crate::trap::{trap_handler, TrapContext};
 
 
@@ -29,13 +30,13 @@ impl TaskInfo {
         TaskInfo {
             status: TaskStatus::Ready, // 根据需要设置初始状态
             syscall_times: [0; MAX_SYSCALL_NUM],
-            time: 0,
+            time: get_time_ms(),
         }
     }
 }
 
 /// The task control block (TCB) of a task.
-#[derive(Clone)]
+
 pub struct TaskControlBlock {
     /// Save task context
     pub task_cx: TaskContext,
@@ -95,7 +96,7 @@ impl TaskControlBlock {
             base_size: user_sp,
             heap_bottom: user_sp,
             program_brk: user_sp,
-            task_info:TaskInfo::new(),
+            task_info:Box::new(TaskInfo::new()),
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.get_trap_cx();

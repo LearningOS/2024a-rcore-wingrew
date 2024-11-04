@@ -15,16 +15,15 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::page_table::PTEFlags;
+use crate::mm::{PhysPageNum, VirtPageNum};
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
-use core::array::from_fn;
 use core::usize;
 
-use crate::config::MAX_APP_NUM;
-use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
 use crate::timer::get_time_ms;
-use alloc::boxed::Box;
+
 
 use lazy_static::*;
 use switch::__switch;
@@ -61,21 +60,10 @@ lazy_static! {
     pub static ref TASK_MANAGER: TaskManager = {
         println!("init TASK_MANAGER");
         let num_app = get_num_app();
-<<<<<<< HEAD
         println!("num_app = {}", num_app);
         let mut tasks: Vec<TaskControlBlock> = Vec::new();
         for i in 0..num_app {
             tasks.push(TaskControlBlock::new(get_app_data(i), i));
-=======
-        let mut tasks: [TaskControlBlock; MAX_APP_NUM] = from_fn(|_| TaskControlBlock {
-            task_cx: TaskContext::zero_init(),
-            task_status: TaskStatus::UnInit,
-            task_info: Box::new(TaskInfo::new()),
-        });
-        for (i, task) in tasks.iter_mut().enumerate() {
-            task.task_cx = TaskContext::goto_restore(init_app_cx(i));
-            task.task_status = TaskStatus::Ready;
->>>>>>> 8541143 (ch3)
         }
         TaskManager {
             num_app,
@@ -96,18 +84,15 @@ impl TaskManager {
     /// But in ch4, we load apps statically, so the first task is a real app.
     fn run_first_task(&self) -> ! {
         let mut inner = self.inner.exclusive_access();
-<<<<<<< HEAD
+
         let next_task = &mut inner.tasks[0];
         next_task.task_status = TaskStatus::Running;
         let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
-=======
-        let task0 = &mut inner.tasks[0];
-        task0.task_status = TaskStatus::Running;
-        let task_info = task0.task_info.as_mut();
+
+        let task_info = next_task.task_info.as_mut();
         task_info.status = TaskStatus::Running;
         task_info.time = get_time_ms();
-        let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
->>>>>>> 8541143 (ch3)
+
         drop(inner);
         let mut _unused = TaskContext::zero_init();
         // before this, we should drop local variables that must be dropped manually
@@ -200,6 +185,22 @@ impl TaskManager {
         let task_info = inner.tasks[current].task_info.as_mut();
         task_info.clone()
     }
+
+    fn map(&self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) -> isize{
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let task = &mut inner.tasks[current].memory_set;
+        task.map(vpn, ppn, flags);
+        0
+    }
+
+    fn unmap(&self, vpn: VirtPageNum) -> isize{
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let task = &mut inner.tasks[current].memory_set;
+        task.unmap(vpn);
+        0
+    }
 }
 
 /// Run the first task in task list.
@@ -235,7 +236,7 @@ pub fn exit_current_and_run_next() {
     run_next_task();
 }
 
-<<<<<<< HEAD
+
 /// Get the current 'Running' task's token.
 pub fn current_user_token() -> usize {
     TASK_MANAGER.get_current_token()
@@ -261,3 +262,12 @@ pub fn show_info()->TaskInfo{
     TASK_MANAGER.show_info()
 }
 
+/// map_one
+pub fn map_one(vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) -> isize{
+    TASK_MANAGER.map(vpn, ppn, flags)
+}
+
+/// unmap_one
+pub fn unmap_one(vpn: VirtPageNum) -> isize{
+    TASK_MANAGER.unmap(vpn)
+}
