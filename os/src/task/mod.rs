@@ -16,7 +16,7 @@
 mod context;
 mod id;
 mod manager;
-mod processor;
+pub(crate) mod processor;
 mod switch;
 #[allow(clippy::module_inception)]
 mod task;
@@ -26,7 +26,7 @@ use alloc::sync::Arc;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
 use switch::__switch;
-pub use task::{TaskControlBlock, TaskStatus};
+pub use task::{TaskControlBlock, TaskStatus, TaskInfo};
 
 pub use context::TaskContext;
 pub use id::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
