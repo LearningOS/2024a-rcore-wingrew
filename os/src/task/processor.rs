@@ -5,8 +5,11 @@
 //! and the replacement and transfer of control flow of different applications are executed.
 
 use super::__switch;
+use super::task::TaskInfo;
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
+use crate::mm::page_table::PTEFlags;
+use crate::mm::{PhysPageNum, VirtPageNum};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
@@ -64,6 +67,7 @@ pub fn run_tasks() {
             // release coming task_inner manually
             drop(task_inner);
             // release coming task TCB manually
+            task.update_stri();
             processor.current = Some(task);
             // release processor manually
             drop(processor);
@@ -98,6 +102,34 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
         .unwrap()
         .inner_exclusive_access()
         .get_trap_cx()
+}
+
+/// update info
+pub fn update_info(id:usize){
+    current_task()
+    .unwrap()
+    .update_info(id);
+}
+
+/// show_info
+pub fn show_info()->TaskInfo{
+    current_task()
+    .unwrap()
+    .show_info()
+}
+
+/// map_one
+pub fn map_one(vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) -> isize{
+    current_task()
+    .unwrap()
+    .map(vpn, ppn, flags)
+}
+
+/// unmap_one
+pub fn unmap_one(vpn: VirtPageNum) -> isize{
+    current_task()
+    .unwrap()
+    .unmap(vpn)
 }
 
 ///Return to idle control flow for new scheduling
