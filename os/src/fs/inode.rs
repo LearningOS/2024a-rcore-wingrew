@@ -4,7 +4,7 @@
 //!
 //! `UPSafeCell<OSInodeInner>` -> `OSInode`: for static `ROOT_INODE`,we
 //! need to wrap `OSInodeInner` into `UPSafeCell`
-use super::File;
+use super::{File, Stat, StatMode};
 use crate::drivers::BLOCK_DEVICE;
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
@@ -13,7 +13,6 @@ use alloc::vec::Vec;
 use bitflags::*;
 use easy_fs::{EasyFileSystem, Inode};
 use lazy_static::*;
-
 /// inode in memory
 /// A wrapper around a filesystem inode
 /// to implement File trait atop
@@ -52,6 +51,43 @@ impl OSInode {
         }
         v
     }
+
+    /// stat
+    pub fn fstat(&self) -> Stat{
+        
+        let inner = self.inner.exclusive_access();
+        
+        let nlink = inner.inode.find_nlink();
+        let inode = inner.inode.find_inode() as u64;
+        let mode:StatMode;
+        if inner.inode.find_type(){
+            mode = StatMode::DIR;
+        }else{
+            mode = StatMode::FILE;
+        }
+        Stat::new_with_defaults(0, inode, mode, nlink as u32)
+    }
+
+    /// link old->new root
+    pub fn link(&self, name: &str) -> i32{
+        let inner = self.inner.exclusive_access();
+        let inode = inner.inode.find_inode() as u32;
+        ROOT_INODE.link(name, inode);
+        0
+    }
+
+    /// unlink
+    pub fn unlink(&self, name: &str) -> i32{
+        let inner = self.inner.exclusive_access();
+        let test = inner.inode.unlink();
+        if test==1{
+            ROOT_INODE.delete(name);
+        }
+        0
+    }
+
+
+
 }
 
 lazy_static! {
@@ -115,12 +151,15 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
                 .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
         }
     } else {
-        ROOT_INODE.find(name).map(|inode| {
-            if flags.contains(OpenFlags::TRUNC) {
-                inode.clear();
+        match ROOT_INODE.find(name){
+            Some(inode) => {
+                    if flags.contains(OpenFlags::TRUNC) {
+                    inode.clear();
+                }
+                Some(Arc::new(OSInode::new(readable, writable, inode)))
             }
-            Arc::new(OSInode::new(readable, writable, inode))
-        })
+            None => None
+        }
     }
 }
 
@@ -154,5 +193,9 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
+    }
+
+    fn fstat(&self) -> Stat{
+        self.fstat()
     }
 }
