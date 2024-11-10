@@ -2,6 +2,7 @@ use crate::sync::{Condvar, Mutex, MutexBlocking, MutexSpin, Semaphore};
 use crate::task::{block_current_and_run_next, current_process, current_task};
 use crate::timer::{add_timer, get_time_ms};
 use alloc::sync::Arc;
+ 
 /// sleep syscall
 pub fn sys_sleep(ms: usize) -> isize {
     trace!(
@@ -71,8 +72,23 @@ pub fn sys_mutex_lock(mutex_id: usize) -> isize {
     let process = current_process();
     let process_inner = process.inner_exclusive_access();
     let mutex = Arc::clone(process_inner.mutex_list[mutex_id].as_ref().unwrap());
-    drop(process_inner);
-    drop(process);
+    if process_inner.detect == 1{
+        let mut sign = 0; 
+        for (_, l_mutex) in process_inner.mutex_list.iter().enumerate(){            
+            if l_mutex.clone().unwrap().detect(){
+                sign = 1;
+                break;
+            }
+        }
+        drop(process_inner);
+        drop(process);
+        if sign == 1{
+            return -0xDEAD;
+        }
+    }else{
+        drop(process_inner);
+        drop(process);
+    }
     mutex.lock();
     0
 }
@@ -146,6 +162,7 @@ pub fn sys_semaphore_up(sem_id: usize) -> isize {
     let process_inner = process.inner_exclusive_access();
     let sem = Arc::clone(process_inner.semaphore_list[sem_id].as_ref().unwrap());
     drop(process_inner);
+    drop(process);
     sem.up();
     0
 }
@@ -165,7 +182,29 @@ pub fn sys_semaphore_down(sem_id: usize) -> isize {
     let process = current_process();
     let process_inner = process.inner_exclusive_access();
     let sem = Arc::clone(process_inner.semaphore_list[sem_id].as_ref().unwrap());
-    drop(process_inner);
+    if process_inner.detect == 1{
+        let mut sign = 0;
+        let mut sign1 = 0; 
+        for (index, l_mutex) in process_inner.semaphore_list.iter().enumerate(){            
+            if l_mutex.clone().unwrap().detect(process.getpid()) && index != sem_id{
+                sign = 1;
+                break;
+            }else if index == sem_id{
+                    let count = l_mutex.clone().unwrap().inner.exclusive_access().count;
+                    if count <= 1{
+                        sign1 = 1;
+                    }
+                }
+        }
+        drop(process_inner);
+        drop(process);
+        if sign + sign1 >= 1{
+            return -0xDEAD;
+        }
+    }else{
+        drop(process_inner);
+        drop(process);
+    }
     sem.down();
     0
 }
@@ -247,5 +286,15 @@ pub fn sys_condvar_wait(condvar_id: usize, mutex_id: usize) -> isize {
 /// YOUR JOB: Implement deadlock detection, but might not all in this syscall
 pub fn sys_enable_deadlock_detect(_enabled: usize) -> isize {
     trace!("kernel: sys_enable_deadlock_detect NOT IMPLEMENTED");
-    -1
+    let process = current_process();
+    let mut process_inner = process.inner_exclusive_access();
+    if _enabled == 1{
+        process_inner.detect = 1;
+        0
+    }else if _enabled == 0{
+        process_inner.detect = 0;
+        0
+    }else{
+        -1
+    }
 }

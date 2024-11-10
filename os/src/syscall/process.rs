@@ -1,11 +1,13 @@
+use core::ptr::write_unaligned;
+
 use crate::{
     config::MAX_SYSCALL_NUM,
     fs::{open_file, OpenFlags},
-    mm::{translated_ref, translated_refmut, translated_str},
+    mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str},
     task::{
         current_process, current_task, current_user_token, exit_current_and_run_next, pid2process,
         suspend_current_and_run_next, SignalFlags, TaskStatus,
-    },
+    }, timer::get_time_us,
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 
@@ -167,7 +169,22 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
         "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
         current_task().unwrap().process.upgrade().unwrap().getpid()
     );
-    -1
+    let us = get_time_us();
+    let tv_sec = us / 1_000_000;
+    let tv_usec = us % 1_000_000;
+    let mut ts = translated_byte_buffer(current_user_token(), _ts as *const u8, core::mem::size_of::<TimeVal>());
+
+    unsafe {
+        // 获取缓冲区的原始指针
+        let ptr = ts[0].as_mut_ptr() as *mut i64;
+
+        // 将 tv_sec 写入偏移 0 的位置
+        write_unaligned(ptr, tv_sec as i64);
+
+        // 将 tv_usec 写入偏移 8 的位置
+        write_unaligned(ptr.add(1), tv_usec as i64);        
+    }
+    0
 }
 
 /// task_info syscall

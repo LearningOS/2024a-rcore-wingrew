@@ -15,6 +15,8 @@ pub struct TaskControlBlock {
     pub kstack: KernelStack,
     /// mutable
     inner: UPSafeCell<TaskControlBlockInner>,
+    /// detect
+    pub detect: usize,
 }
 
 impl TaskControlBlock {
@@ -77,6 +79,7 @@ impl TaskControlBlock {
                     exit_code: None,
                 })
             },
+            detect:0
         }
     }
 }
